@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redwall: The Warrior's Quest</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        @font-face {
+            font-family: 'GameFont';
+            src: local('Georgia'), local('Times New Roman'), local('serif');
+        }
+
+        body {
+            background: #1a0a00;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Georgia, 'Times New Roman', serif;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 960px;
+            height: 640px;
+            border: 4px solid #8B4513;
+            border-radius: 4px;
+            box-shadow: 0 0 30px rgba(139, 69, 19, 0.5), inset 0 0 30px rgba(0, 0, 0, 0.3);
+        }
+
+        canvas {
+            display: block;
+            width: 960px;
+            height: 640px;
+            image-rendering: pixelated;
+        }
+
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #ui-overlay.active {
+            pointer-events: auto;
+        }
+
+        #dialogue-box {
+            display: none;
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 880px;
+            background: linear-gradient(to bottom, rgba(40, 20, 5, 0.95), rgba(30, 15, 3, 0.98));
+            border: 3px solid #CD853F;
+            border-radius: 8px;
+            padding: 20px;
+            color: #F5DEB3;
+            font-size: 16px;
+            line-height: 1.6;
+            pointer-events: auto;
+            z-index: 20;
+        }
+
+        #dialogue-box .speaker {
+            color: #FFD700;
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 8px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        #dialogue-box .text {
+            min-height: 40px;
+        }
+
+        #dialogue-box .continue-hint {
+            text-align: right;
+            color: #CD853F;
+            font-size: 13px;
+            margin-top: 10px;
+            animation: blink 1.2s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        #inventory-panel {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            background: linear-gradient(to bottom, rgba(40, 20, 5, 0.97), rgba(25, 12, 2, 0.98));
+            border: 3px solid #CD853F;
+            border-radius: 8px;
+            padding: 24px;
+            color: #F5DEB3;
+            pointer-events: auto;
+            z-index: 25;
+        }
+
+        #inventory-panel h2 {
+            color: #FFD700;
+            text-align: center;
+            margin-bottom: 16px;
+            font-size: 22px;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+        }
+
+        #inventory-panel .inv-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        #inventory-panel .inv-slot {
+            width: 96px;
+            height: 96px;
+            background: rgba(0,0,0,0.4);
+            border: 2px solid #8B4513;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        #inventory-panel .inv-slot:hover {
+            border-color: #FFD700;
+        }
+
+        #inventory-panel .inv-slot .item-name {
+            font-size: 11px;
+            color: #CD853F;
+            margin-top: 4px;
+            text-align: center;
+        }
+
+        #inventory-panel .inv-slot .item-count {
+            font-size: 10px;
+            color: #F5DEB3;
+        }
+
+        #inventory-panel .item-desc {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid #8B4513;
+            border-radius: 4px;
+            padding: 12px;
+            min-height: 60px;
+            font-size: 14px;
+            color: #DEB887;
+        }
+
+        #quest-log {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 550px;
+            max-height: 450px;
+            background: linear-gradient(to bottom, rgba(40, 20, 5, 0.97), rgba(25, 12, 2, 0.98));
+            border: 3px solid #CD853F;
+            border-radius: 8px;
+            padding: 24px;
+            color: #F5DEB3;
+            pointer-events: auto;
+            overflow-y: auto;
+            z-index: 25;
+        }
+
+        #quest-log h2 {
+            color: #FFD700;
+            text-align: center;
+            margin-bottom: 16px;
+            font-size: 22px;
+        }
+
+        .quest-entry {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid #8B4513;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+
+        .quest-entry.completed {
+            opacity: 0.6;
+        }
+
+        .quest-entry .quest-title {
+            color: #FFD700;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .quest-entry.completed .quest-title::after {
+            content: ' [Complete]';
+            color: #32CD32;
+        }
+
+        #game-menu {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: auto;
+            z-index: 30;
+        }
+
+        #game-menu .menu-btn {
+            display: block;
+            width: 280px;
+            padding: 14px 24px;
+            margin: 10px auto;
+            background: linear-gradient(to bottom, #8B4513, #654321);
+            border: 2px solid #CD853F;
+            border-radius: 6px;
+            color: #F5DEB3;
+            font-family: Georgia, serif;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        #game-menu .menu-btn:hover {
+            background: linear-gradient(to bottom, #A0522D, #8B4513);
+            border-color: #FFD700;
+            color: #FFD700;
+            transform: scale(1.05);
+        }
+
+        #notification {
+            display: none;
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(40, 20, 5, 0.9);
+            border: 2px solid #FFD700;
+            border-radius: 6px;
+            padding: 10px 24px;
+            color: #FFD700;
+            font-size: 16px;
+            z-index: 15;
+            animation: fadeInOut 3s forwards;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+            15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            75% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        #combat-ui {
+            display: none;
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 400px;
+            background: rgba(40, 5, 5, 0.9);
+            border: 3px solid #8B0000;
+            border-radius: 8px;
+            padding: 16px;
+            pointer-events: auto;
+            z-index: 20;
+        }
+
+        #combat-ui .combat-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        #combat-ui .combat-btn {
+            padding: 8px 20px;
+            background: linear-gradient(to bottom, #8B0000, #5C0000);
+            border: 2px solid #CD5C5C;
+            border-radius: 4px;
+            color: #FFA07A;
+            font-family: Georgia, serif;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        #combat-ui .combat-btn:hover {
+            background: linear-gradient(to bottom, #A00000, #8B0000);
+            border-color: #FF6347;
+            color: #FFD700;
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: 4px;
+            right: 10px;
+            color: rgba(205, 133, 63, 0.5);
+            font-size: 11px;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="960" height="640"></canvas>
+        <div id="ui-overlay">
+            <div id="dialogue-box">
+                <div class="speaker"></div>
+                <div class="text"></div>
+                <div class="continue-hint">Press SPACE or click to continue...</div>
+            </div>
+            <div id="inventory-panel">
+                <h2>Satchel</h2>
+                <div class="inv-grid" id="inv-grid"></div>
+                <div class="item-desc" id="item-desc">Select an item to view details...</div>
+            </div>
+            <div id="quest-log">
+                <h2>Quest Journal</h2>
+                <div id="quest-entries"></div>
+            </div>
+            <div id="game-menu"></div>
+            <div id="notification"></div>
+            <div id="combat-ui">
+                <div class="combat-actions">
+                    <button class="combat-btn" id="btn-attack">Attack (A)</button>
+                    <button class="combat-btn" id="btn-defend">Defend (D)</button>
+                    <button class="combat-btn" id="btn-special">Special (S)</button>
+                    <button class="combat-btn" id="btn-flee">Flee (F)</button>
+                </div>
+            </div>
+        </div>
+        <div class="controls-hint">WASD/Arrows: Move | SPACE: Interact | I: Inventory | Q: Quests | ESC: Menu</div>
+    </div>
+
+    <script src="js/utils.js"></script>
+    <script src="js/sprites.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/maps.js"></script>
+    <script src="js/items.js"></script>
+    <script src="js/combat.js"></script>
+    <script src="js/dialogue.js"></script>
+    <script src="js/quests.js"></script>
+    <script src="js/entities.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>

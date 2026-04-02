@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spaghetti Chef! - The Pasta Catching Game</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: linear-gradient(135deg, #2d1810, #4a2520, #2d1810);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            overflow: hidden;
+        }
+
+        #game-wrapper {
+            text-align: center;
+        }
+
+        h1 {
+            color: #FFD700;
+            font-size: 36px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+        }
+
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            border: 4px solid #CD853F;
+            border-radius: 8px;
+            box-shadow: 0 0 40px rgba(205, 133, 63, 0.4);
+            overflow: hidden;
+            cursor: none;
+        }
+
+        canvas {
+            display: block;
+            width: 800px;
+            height: 600px;
+        }
+
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .hud-item {
+            color: #F5DEB3;
+            font-size: 18px;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            background: rgba(30, 15, 5, 0.7);
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(205, 133, 63, 0.5);
+        }
+
+        .hud-item .label { color: #CD853F; font-size: 14px; }
+        .hud-item .value { color: #FFD700; font-weight: bold; }
+
+        #recipe-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 8px 20px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            background: rgba(30, 15, 5, 0.8);
+            border-top: 2px solid rgba(205, 133, 63, 0.4);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .recipe-ingredient {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 16px;
+            color: #DEB887;
+            opacity: 0.5;
+            transition: all 0.3s;
+        }
+
+        .recipe-ingredient.collected {
+            opacity: 1;
+            color: #FFD700;
+            text-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+        }
+
+        .recipe-ingredient .emoji { font-size: 22px; }
+
+        #start-screen, #game-over-screen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(20, 10, 5, 0.92);
+            z-index: 50;
+        }
+
+        #game-over-screen { display: none; }
+
+        .screen-title {
+            font-size: 52px;
+            color: #FFD700;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.7);
+            margin-bottom: 10px;
+        }
+
+        .screen-subtitle {
+            font-size: 20px;
+            color: #DEB887;
+            margin-bottom: 30px;
+        }
+
+        .screen-emoji {
+            font-size: 80px;
+            margin-bottom: 20px;
+        }
+
+        .game-btn {
+            padding: 14px 40px;
+            background: linear-gradient(to bottom, #CD853F, #8B4513);
+            border: 3px solid #FFD700;
+            border-radius: 30px;
+            color: #FFF8DC;
+            font-family: Georgia, serif;
+            font-size: 22px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin: 8px;
+        }
+
+        .game-btn:hover {
+            background: linear-gradient(to bottom, #DEB887, #CD853F);
+            transform: scale(1.08);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+        }
+
+        .final-score {
+            font-size: 28px;
+            color: #FFD700;
+            margin: 15px 0;
+        }
+
+        .stats-line {
+            color: #DEB887;
+            font-size: 16px;
+            margin: 4px 0;
+        }
+
+        #combo-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: #FFD700;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+            pointer-events: none;
+            z-index: 15;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .controls-hint {
+            color: rgba(205, 133, 63, 0.6);
+            font-size: 13px;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-wrapper">
+        <h1>🍝 Spaghetti Chef! 🍝</h1>
+        <div id="game-container">
+            <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+            <div id="hud">
+                <div class="hud-item">
+                    <span class="label">Score: </span>
+                    <span class="value" id="score-display">0</span>
+                </div>
+                <div class="hud-item">
+                    <span class="label">Level: </span>
+                    <span class="value" id="level-display">1</span>
+                </div>
+                <div class="hud-item">
+                    <span class="label">Combo: </span>
+                    <span class="value" id="combo-display-hud">x1</span>
+                </div>
+                <div class="hud-item">
+                    <span class="label">Lives: </span>
+                    <span class="value" id="lives-display">❤️❤️❤️</span>
+                </div>
+            </div>
+
+            <div id="recipe-bar"></div>
+
+            <div id="combo-display"></div>
+
+            <div id="start-screen">
+                <div class="screen-emoji">🍝</div>
+                <div class="screen-title">Spaghetti Chef!</div>
+                <div class="screen-subtitle">Catch ingredients to cook the perfect pasta!</div>
+                <button class="game-btn" id="start-btn">Start Cooking!</button>
+                <div class="controls-hint" style="margin-top: 20px; font-size: 15px; color: #CD853F;">
+                    🖱️ Move mouse to control the pot<br>
+                    ⬅️➡️ Or use Arrow Keys / A-D<br>
+                    🍅 Catch good ingredients, avoid rotten ones!<br>
+                    🍝 Complete recipes for bonus points!
+                </div>
+            </div>
+
+            <div id="game-over-screen">
+                <div class="screen-emoji">👨‍🍳</div>
+                <div class="screen-title">Kitchen Closed!</div>
+                <div class="final-score" id="final-score">Score: 0</div>
+                <div class="stats-line" id="stat-caught">Ingredients caught: 0</div>
+                <div class="stats-line" id="stat-recipes">Recipes completed: 0</div>
+                <div class="stats-line" id="stat-best-combo">Best combo: x1</div>
+                <button class="game-btn" id="restart-btn">Cook Again!</button>
+            </div>
+        </div>
+        <div class="controls-hint">Mouse or Arrow Keys to move pot | Catch ingredients, dodge the bad stuff!</div>
+    </div>
+
+    <script>
+    // ==================== SPAGHETTI CHEF GAME ====================
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = 800, H = 600;
+
+    // --- Game State ---
+    let game = {
+        state: 'menu', // menu, playing, gameover
+        score: 0,
+        level: 1,
+        lives: 3,
+        combo: 1,
+        bestCombo: 1,
+        caught: 0,
+        missed: 0,
+        recipesCompleted: 0,
+        spawnTimer: 0,
+        spawnRate: 60,
+        levelTimer: 0,
+        particles: [],
+        ingredients: [],
+        steamParticles: [],
+        shakeTimer: 0,
+        shakeIntensity: 0,
+        comboTimer: 0,
+        bgNoodles: [],
+    };
+
+    // --- Pot (player) ---
+    let pot = {
+        x: W / 2,
+        y: H - 90,
+        width: 100,
+        height: 60,
+        speed: 8,
+        targetX: W / 2,
+        useKeyboard: false,
+        moveLeft: false,
+        moveRight: false,
+    };
+
+    // --- Ingredient types ---
+    const GOOD_INGREDIENTS = [
+        { name: 'Spaghetti', emoji: '🍝', points: 10, color: '#FFD700' },
+        { name: 'Tomato', emoji: '🍅', points: 15, color: '#FF6347' },
+        { name: 'Meatball', emoji: '🧆', points: 20, color: '#8B4513' },
+        { name: 'Cheese', emoji: '🧀', points: 15, color: '#FFD700' },
+        { name: 'Basil', emoji: '🌿', points: 10, color: '#32CD32' },
+        { name: 'Garlic', emoji: '🧄', points: 12, color: '#F5F5DC' },
+        { name: 'Olive Oil', emoji: '🫒', points: 12, color: '#6B8E23' },
+        { name: 'Mushroom', emoji: '🍄', points: 18, color: '#D2B48C' },
+        { name: 'Pepper', emoji: '🌶️', points: 25, color: '#FF4500' },
+        { name: 'Onion', emoji: '🧅', points: 10, color: '#DEB887' },
+    ];
+
+    const BAD_INGREDIENTS = [
+        { name: 'Rotten Fish', emoji: '🐟', points: -30, color: '#708090', bad: true },
+        { name: 'Shoe', emoji: '👟', points: -25, color: '#808080', bad: true },
+        { name: 'Soap', emoji: '🧼', points: -20, color: '#87CEEB', bad: true },
+        { name: 'Bug', emoji: '🪲', points: -35, color: '#2F4F4F', bad: true },
+    ];
+
+    // --- Recipes ---
+    const RECIPES = [
+        { name: 'Classic Spaghetti', ingredients: ['Spaghetti', 'Tomato', 'Basil'], bonus: 100, emoji: '🍝' },
+        { name: 'Meatball Pasta', ingredients: ['Spaghetti', 'Meatball', 'Tomato'], bonus: 120, emoji: '🧆' },
+        { name: 'Cheese Pasta', ingredients: ['Spaghetti', 'Cheese', 'Garlic'], bonus: 110, emoji: '🧀' },
+        { name: 'Spicy Spaghetti', ingredients: ['Spaghetti', 'Pepper', 'Garlic'], bonus: 150, emoji: '🌶️' },
+        { name: 'Mushroom Pasta', ingredients: ['Spaghetti', 'Mushroom', 'Olive Oil'], bonus: 130, emoji: '🍄' },
+    ];
+
+    let currentRecipe = null;
+    let collectedForRecipe = [];
+
+    // --- Initialize background noodles ---
+    function initBgNoodles() {
+        game.bgNoodles = [];
+        for (let i = 0; i < 15; i++) {
+            game.bgNoodles.push({
+                x: Math.random() * W,
+                y: Math.random() * H,
+                length: 30 + Math.random() * 60,
+                angle: Math.random() * Math.PI * 2,
+                rotSpeed: (Math.random() - 0.5) * 0.01,
+                opacity: 0.05 + Math.random() * 0.08,
+            });
+        }
+    }
+
+    // --- Pick a new recipe ---
+    function pickRecipe() {
+        currentRecipe = RECIPES[Math.floor(Math.random() * RECIPES.length)];
+        collectedForRecipe = [];
+        updateRecipeBar();
+    }
+
+    function updateRecipeBar() {
+        const bar = document.getElementById('recipe-bar');
+        if (!currentRecipe) { bar.innerHTML = ''; return; }
+        bar.innerHTML = `<span style="color:#CD853F;font-size:14px;align-self:center;">Recipe: ${currentRecipe.name}</span>`;
+        currentRecipe.ingredients.forEach(name => {
+            const ing = GOOD_INGREDIENTS.find(i => i.name === name);
+            const collected = collectedForRecipe.includes(name);
+            const div = document.createElement('div');
+            div.className = 'recipe-ingredient' + (collected ? ' collected' : '');
+            div.innerHTML = `<span class="emoji">${ing ? ing.emoji : '?'}</span><span>${name}</span>${collected ? ' ✓' : ''}`;
+            bar.appendChild(div);
+        });
+    }
+
+    // --- Spawn ingredient ---
+    function spawnIngredient() {
+        const isBad = Math.random() < 0.15 + game.level * 0.02;
+        const pool = isBad ? BAD_INGREDIENTS : GOOD_INGREDIENTS;
+        const type = pool[Math.floor(Math.random() * pool.length)];
+
+        // Bias towards recipe ingredients sometimes
+        let finalType = type;
+        if (!isBad && currentRecipe && Math.random() < 0.35) {
+            const needed = currentRecipe.ingredients.filter(n => !collectedForRecipe.includes(n));
+            if (needed.length > 0) {
+                const name = needed[Math.floor(Math.random() * needed.length)];
+                const found = GOOD_INGREDIENTS.find(i => i.name === name);
+                if (found) finalType = found;
+            }
+        }
+
+        const speed = 2 + Math.random() * 1.5 + game.level * 0.3;
+        const wobbleSpeed = 0.02 + Math.random() * 0.03;
+
+        game.ingredients.push({
+            x: 40 + Math.random() * (W - 80),
+            y: -30,
+            speed: speed,
+            wobble: Math.random() * Math.PI * 2,
+            wobbleSpeed: wobbleSpeed,
+            wobbleAmount: 15 + Math.random() * 20,
+            rotation: 0,
+            rotSpeed: (Math.random() - 0.5) * 0.05,
+            size: 34 + Math.random() * 8,
+            type: finalType,
+            bad: !!finalType.bad,
+        });
+    }
+
+    // --- Particles ---
+    function spawnCatchParticles(x, y, color, count) {
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 2 + Math.random() * 4;
+            game.particles.push({
+                x, y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed - 2,
+                life: 30 + Math.random() * 20,
+                maxLife: 50,
+                size: 3 + Math.random() * 5,
+                color: color,
+            });
+        }
+    }
+
+    function spawnSteam() {
+        if (Math.random() < 0.3) {
+            game.steamParticles.push({
+                x: pot.x + (Math.random() - 0.5) * pot.width * 0.6,
+                y: pot.y - pot.height / 2,
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: -0.5 - Math.random() * 1,
+                life: 40 + Math.random() * 30,
+                maxLife: 70,
+                size: 5 + Math.random() * 8,
+            });
+        }
+    }
+
+    // --- Update ---
+    function update() {
+        if (game.state !== 'playing') return;
+
+        // Pot movement
+        if (pot.useKeyboard) {
+            if (pot.moveLeft) pot.x -= pot.speed;
+            if (pot.moveRight) pot.x += pot.speed;
+        } else {
+            pot.x += (pot.targetX - pot.x) * 0.15;
+        }
+        pot.x = Math.max(pot.width / 2, Math.min(W - pot.width / 2, pot.x));
+
+        // Spawn
+        game.spawnTimer++;
+        const rate = Math.max(20, game.spawnRate - game.level * 5);
+        if (game.spawnTimer >= rate) {
+            game.spawnTimer = 0;
+            spawnIngredient();
+        }
+
+        // Level up
+        game.levelTimer++;
+        if (game.levelTimer >= 600) { // every ~10 seconds
+            game.levelTimer = 0;
+            game.level++;
+            document.getElementById('level-display').textContent = game.level;
+            showComboText(`Level ${game.level}!`);
+        }
+
+        // Update ingredients
+        for (let i = game.ingredients.length - 1; i >= 0; i--) {
+            const ing = game.ingredients[i];
+            ing.wobble += ing.wobbleSpeed;
+            ing.x += Math.sin(ing.wobble) * ing.wobbleAmount * 0.02;
+            ing.y += ing.speed;
+            ing.rotation += ing.rotSpeed;
+
+            // Check catch
+            const dx = ing.x - pot.x;
+            const dy = ing.y - pot.y;
+            if (Math.abs(dx) < pot.width / 2 + 10 && Math.abs(dy) < pot.height / 2 + 10 && ing.y > pot.y - pot.height) {
+                catchIngredient(ing);
+                game.ingredients.splice(i, 1);
+                continue;
+            }
+
+            // Missed
+            if (ing.y > H + 40) {
+                if (!ing.bad) {
+                    game.combo = 1;
+                    game.comboTimer = 0;
+                    document.getElementById('combo-display-hud').textContent = 'x1';
+                }
+                game.ingredients.splice(i, 1);
+            }
+        }
+
+        // Update particles
+        for (let i = game.particles.length - 1; i >= 0; i--) {
+            const p = game.particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.1;
+            p.life--;
+            if (p.life <= 0) game.particles.splice(i, 1);
+        }
+
+        // Update steam
+        spawnSteam();
+        for (let i = game.steamParticles.length - 1; i >= 0; i--) {
+            const s = game.steamParticles[i];
+            s.x += s.vx;
+            s.y += s.vy;
+            s.life--;
+            if (s.life <= 0) game.steamParticles.splice(i, 1);
+        }
+
+        // Combo timer
+        if (game.comboTimer > 0) {
+            game.comboTimer--;
+            if (game.comboTimer <= 0) {
+                game.combo = 1;
+                document.getElementById('combo-display-hud').textContent = 'x1';
+            }
+        }
+
+        // Shake
+        if (game.shakeTimer > 0) game.shakeTimer--;
+
+        // BG noodles
+        game.bgNoodles.forEach(n => {
+            n.angle += n.rotSpeed;
+        });
+    }
+
+    function catchIngredient(ing) {
+        if (ing.bad) {
+            // Bad ingredient!
+            game.lives--;
+            game.combo = 1;
+            game.comboTimer = 0;
+            game.shakeTimer = 15;
+            game.shakeIntensity = 8;
+            spawnCatchParticles(ing.x, pot.y, '#FF0000', 15);
+            updateLives();
+            document.getElementById('combo-display-hud').textContent = 'x1';
+            if (game.lives <= 0) {
+                endGame();
+            }
+            return;
+        }
+
+        // Good ingredient!
+        const points = ing.type.points * game.combo;
+        game.score += points;
+        game.caught++;
+        game.combo++;
+        game.comboTimer = 180; // 3 seconds to maintain combo
+        if (game.combo > game.bestCombo) game.bestCombo = game.combo;
+
+        document.getElementById('score-display').textContent = game.score;
+        document.getElementById('combo-display-hud').textContent = `x${game.combo}`;
+
+        spawnCatchParticles(ing.x, pot.y, ing.type.color, 12);
+
+        if (game.combo >= 5) {
+            showComboText(`COMBO x${game.combo}!`);
+        }
+
+        // Show floating score
+        game.particles.push({
+            x: ing.x, y: pot.y - 40,
+            vx: 0, vy: -2,
+            life: 40, maxLife: 40,
+            size: 0, // text particle
+            color: ing.type.color,
+            text: `+${points}`,
+        });
+
+        // Recipe check
+        if (currentRecipe) {
+            const needed = currentRecipe.ingredients.filter(n => !collectedForRecipe.includes(n));
+            if (needed.includes(ing.type.name)) {
+                collectedForRecipe.push(ing.type.name);
+                updateRecipeBar();
+
+                if (collectedForRecipe.length === currentRecipe.ingredients.length) {
+                    // Recipe complete!
+                    game.score += currentRecipe.bonus;
+                    game.recipesCompleted++;
+                    document.getElementById('score-display').textContent = game.score;
+                    showComboText(`${currentRecipe.emoji} ${currentRecipe.name}! +${currentRecipe.bonus}`);
+                    spawnCatchParticles(W / 2, H / 2, '#FFD700', 30);
+
+                    // Extra life every 3 recipes
+                    if (game.recipesCompleted % 3 === 0 && game.lives < 5) {
+                        game.lives++;
+                        updateLives();
+                        showComboText('Extra Life! ❤️');
+                    }
+
+                    setTimeout(pickRecipe, 1500);
+                }
+            }
+        }
+    }
+
+    function updateLives() {
+        document.getElementById('lives-display').textContent = '❤️'.repeat(Math.max(0, game.lives));
+    }
+
+    function showComboText(text) {
+        const el = document.getElementById('combo-display');
+        el.textContent = text;
+        el.style.opacity = '1';
+        setTimeout(() => { el.style.opacity = '0'; }, 1200);
+    }
+
+    function endGame() {
+        game.state = 'gameover';
+        document.getElementById('final-score').textContent = `Score: ${game.score}`;
+        document.getElementById('stat-caught').textContent = `Ingredients caught: ${game.caught}`;
+        document.getElementById('stat-recipes').textContent = `Recipes completed: ${game.recipesCompleted}`;
+        document.getElementById('stat-best-combo').textContent = `Best combo: x${game.bestCombo}`;
+        document.getElementById('game-over-screen').style.display = 'flex';
+    }
+
+    // --- Drawing ---
+    function draw() {
+        ctx.clearRect(0, 0, W, H);
+
+        // Screen shake
+        let sx = 0, sy = 0;
+        if (game.shakeTimer > 0) {
+            sx = (Math.random() - 0.5) * game.shakeIntensity;
+            sy = (Math.random() - 0.5) * game.shakeIntensity;
+        }
+        ctx.save();
+        ctx.translate(sx, sy);
+
+        // Background - kitchen
+        drawBackground();
+
+        // Steam particles
+        game.steamParticles.forEach(s => {
+            const alpha = (s.life / s.maxLife) * 0.3;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            ctx.fill();
+        });
+
+        // Ingredients
+        game.ingredients.forEach(ing => {
+            ctx.save();
+            ctx.translate(ing.x, ing.y);
+            ctx.rotate(ing.rotation);
+            ctx.font = `${ing.size}px serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // Glow for bad ingredients
+            if (ing.bad) {
+                ctx.shadowColor = '#FF0000';
+                ctx.shadowBlur = 12;
+            } else {
+                ctx.shadowColor = ing.type.color;
+                ctx.shadowBlur = 6;
+            }
+
+            ctx.fillText(ing.type.emoji, 0, 0);
+            ctx.restore();
+        });
+
+        // Pot
+        drawPot();
+
+        // Particles
+        game.particles.forEach(p => {
+            const alpha = p.life / p.maxLife;
+            if (p.text) {
+                ctx.font = 'bold 20px Georgia';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = alpha;
+                ctx.fillText(p.text, p.x, p.y);
+                ctx.globalAlpha = 1;
+            } else {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = alpha;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+        });
+
+        ctx.restore();
+    }
+
+    function drawBackground() {
+        // Kitchen gradient
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, '#3a2218');
+        grad.addColorStop(0.6, '#4a2a1a');
+        grad.addColorStop(1, '#2a1a10');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        // Tile pattern on wall
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+        for (let x = 0; x < W; x += 40) {
+            for (let y = 0; y < H * 0.5; y += 40) {
+                ctx.fillRect(x + 1, y + 1, 38, 38);
+            }
+        }
+
+        // Counter
+        ctx.fillStyle = '#5C3A21';
+        ctx.fillRect(0, H - 120, W, 120);
+        ctx.fillStyle = '#6B4226';
+        ctx.fillRect(0, H - 120, W, 6);
+
+        // Checkered counter top
+        for (let x = 0; x < W; x += 30) {
+            if ((x / 30) % 2 === 0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+                ctx.fillRect(x, H - 120, 30, 120);
+            }
+        }
+
+        // BG noodles (decorative)
+        game.bgNoodles.forEach(n => {
+            ctx.save();
+            ctx.translate(n.x, n.y);
+            ctx.rotate(n.angle);
+            ctx.strokeStyle = `rgba(255, 215, 0, ${n.opacity})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-n.length / 2, 0);
+            ctx.quadraticCurveTo(0, 15, n.length / 2, 0);
+            ctx.stroke();
+            ctx.restore();
+        });
+    }
+
+    function drawPot() {
+        const px = pot.x;
+        const py = pot.y;
+        const pw = pot.width;
+        const ph = pot.height;
+
+        // Pot shadow
+        ctx.beginPath();
+        ctx.ellipse(px, py + ph / 2 + 5, pw / 2 + 5, 10, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fill();
+
+        // Pot body
+        ctx.beginPath();
+        ctx.moveTo(px - pw / 2, py - ph / 3);
+        ctx.lineTo(px - pw / 2 + 8, py + ph / 2);
+        ctx.lineTo(px + pw / 2 - 8, py + ph / 2);
+        ctx.lineTo(px + pw / 2, py - ph / 3);
+        ctx.closePath();
+
+        const potGrad = ctx.createLinearGradient(px - pw / 2, 0, px + pw / 2, 0);
+        potGrad.addColorStop(0, '#5a5a5a');
+        potGrad.addColorStop(0.3, '#8a8a8a');
+        potGrad.addColorStop(0.5, '#a0a0a0');
+        potGrad.addColorStop(0.7, '#8a8a8a');
+        potGrad.addColorStop(1, '#5a5a5a');
+        ctx.fillStyle = potGrad;
+        ctx.fill();
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Pot rim
+        ctx.beginPath();
+        ctx.ellipse(px, py - ph / 3, pw / 2 + 3, 8, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#9a9a9a';
+        ctx.fill();
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Inner pot (darker)
+        ctx.beginPath();
+        ctx.ellipse(px, py - ph / 3, pw / 2 - 3, 6, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#3a2a1a';
+        ctx.fill();
+
+        // Handles
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#777';
+        ctx.beginPath();
+        ctx.arc(px - pw / 2 - 10, py, 10, -Math.PI / 2, Math.PI / 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(px + pw / 2 + 10, py, 10, Math.PI / 2, -Math.PI / 2);
+        ctx.stroke();
+
+        // Spaghetti in pot
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(px, py - ph / 3, pw / 2 - 5, 5, 0, 0, Math.PI * 2);
+        ctx.clip();
+        for (let i = 0; i < 6; i++) {
+            ctx.strokeStyle = `rgba(255, 215, 100, ${0.5 + Math.random() * 0.3})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            const sx = px - 20 + i * 8;
+            ctx.moveTo(sx, py - ph / 3 - 3);
+            ctx.quadraticCurveTo(sx + 5, py - ph / 3 + 2, sx + 3, py - ph / 3 + 5);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    // --- Game Loop ---
+    function gameLoop() {
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    // --- Start Game ---
+    function startGame() {
+        game = {
+            state: 'playing',
+            score: 0,
+            level: 1,
+            lives: 3,
+            combo: 1,
+            bestCombo: 1,
+            caught: 0,
+            missed: 0,
+            recipesCompleted: 0,
+            spawnTimer: 0,
+            spawnRate: 60,
+            levelTimer: 0,
+            particles: [],
+            ingredients: [],
+            steamParticles: [],
+            shakeTimer: 0,
+            shakeIntensity: 0,
+            comboTimer: 0,
+            bgNoodles: [],
+        };
+        initBgNoodles();
+        pot.x = W / 2;
+        pot.targetX = W / 2;
+
+        document.getElementById('score-display').textContent = '0';
+        document.getElementById('level-display').textContent = '1';
+        document.getElementById('combo-display-hud').textContent = 'x1';
+        updateLives();
+
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('game-over-screen').style.display = 'none';
+
+        pickRecipe();
+    }
+
+    // --- Input ---
+    canvas.addEventListener('mousemove', (e) => {
+        if (game.state !== 'playing') return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = W / rect.width;
+        pot.targetX = (e.clientX - rect.left) * scaleX;
+        pot.useKeyboard = false;
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (game.state !== 'playing') return;
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+            pot.moveLeft = true;
+            pot.useKeyboard = true;
+        }
+        if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+            pot.moveRight = true;
+            pot.useKeyboard = true;
+        }
+    });
+
+    document.addEventListener('keyup', (e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') pot.moveLeft = false;
+        if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') pot.moveRight = false;
+    });
+
+    // --- Buttons ---
+    document.getElementById('start-btn').addEventListener('click', startGame);
+    document.getElementById('restart-btn').addEventListener('click', startGame);
+
+    // --- Init ---
+    initBgNoodles();
+    gameLoop();
+    </script>
+</body>
+</html>
